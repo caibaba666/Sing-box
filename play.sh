@@ -1,17 +1,19 @@
 #!/bin/bash
 
-# Define colors for output
+# 定义颜色
 re="\033[0m"
-red="\033[1;91m"
-green="\e[1;32m"
-yellow="\e[1;33m"
-purple="\e[1;35m"
-red() { echo -e "\e[1;91m$1\033[0m"; }
-green() { echo -e "\e[1;32m$1\033[0m"; }
-yellow() { echo -e "\e[1;33m$1\033[0m"; }
-purple() { echo -e "\e[1;35m$1\033[0m"; }
+red_func="\033[1;91m"
+green_func="\e[1;32m"
+yellow_func="\e[1;33m"
+purple_func="\e[1;35m"
 
-# Default ports
+# 颜色输出函数
+red() { echo -e "$red_func$1$re"; }
+green() { echo -e "$green_func$1$re"; }
+yellow() { echo -e "$yellow_func$1$re"; }
+purple() { echo -e "$purple_func$1$re"; }
+
+# 设置默认端口
 vless_port=44
 hy2_port=80
 tuic_port=8003
@@ -39,16 +41,16 @@ download_and_run_singbox() {
       exit 1
   fi
 
-  generate_random_name() {
+generate_random_name() {
     local chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
     local name=""
     for i in {1..6}; do
         name="$name${chars:RANDOM%${#chars}:1}"
     done
     echo "$name"
-  }
+}
 
-  download_with_fallback() {
+download_with_fallback() {
     local URL=$1
     local NEW_FILENAME=$2
 
@@ -63,38 +65,38 @@ download_and_run_singbox() {
         kill $CURL_PID 2>/dev/null
         wait $CURL_PID 2>/dev/null
         wget -q -O "$NEW_FILENAME" "$URL"
-        echo -e "\e[1;32mDownloading $NEW_FILENAME by wget\e[0m"
+        echo -e "$green_funcDownloading $NEW_FILENAME by wget$re"
     else
         wait $CURL_PID
-        echo -e "\e[1;32mDownloading $NEW_FILENAME by curl\e[0m"
+        echo -e "$green_funcDownloading $NEW_FILENAME by curl$re"
     fi
-  }
+}
 
-  declare -A FILE_MAP
-  for entry in "${FILE_INFO[@]}"; do
+declare -A FILE_MAP
+for entry in "${FILE_INFO[@]}"; do
     URL=$(echo "$entry" | cut -d ' ' -f 1)
     RANDOM_NAME=$(generate_random_name)
     NEW_FILENAME="$DOWNLOAD_DIR/$RANDOM_NAME"
     
     if [ -e "$NEW_FILENAME" ]; then
-        echo -e "\e[1;32m$NEW_FILENAME already exists, Skipping download\e[0m"
+        echo -e "$green_func$NEW_FILENAME already exists, Skipping download$re"
     else
         download_with_fallback "$URL" "$NEW_FILENAME"
     fi
     
     chmod +x "$NEW_FILENAME"
     FILE_MAP[$(echo "$entry" | cut -d ' ' -f 2)]="$NEW_FILENAME"
-  done
-  wait
+done
+wait
 
-  output=$(./"$(basename ${FILE_MAP[web]})" generate reality-keypair)
-  private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
-  public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
+output=$(./"$(basename ${FILE_MAP[web]})" generate reality-keypair)
+private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
+public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 
-  openssl ecparam -genkey -name prime256v1 -out "private.key"
-  openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=$USERNAME.serv00.net"
+openssl ecparam -genkey -name prime256v1 -out "private.key"
+openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=$USERNAME.serv00.net"
 
-  cat > config.json << EOF
+cat > config.json << EOF
 {
   "log": {
     "disabled": true,
@@ -204,7 +206,7 @@ download_and_run_singbox() {
         "key_path": "private.key"
       }
     }
-  ],
+ ],
   "outbounds": [
     {
       "type": "direct",
@@ -248,18 +250,130 @@ download_and_run_singbox() {
       },
       {
         "rule_set": [
-          "geosite-all"
+          "geosite-openai"
+        ],
+        "outbound": "wireguard-out"
+      },
+      {
+        "rule_set": [
+          "geosite-netflix"
+        ],
+        "outbound": "wireguard-out"
+      },
+      {
+        "rule_set": [
+          "geosite-category-ads-all"
         ],
         "outbound": "block"
       }
-    ]
+    ],
+    "rule_set": [
+      {
+        "tag": "geosite-netflix",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-netflix.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "geosite-openai",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/openai.srs",
+        "download_detour": "direct"
+      },      
+      {
+        "tag": "geosite-category-ads-all",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+        "download_detour": "direct"
+      }
+    ],
+    "final": "direct"
+   },
+   "experimental": {
+      "cache_file": {
+      "path": "cache.db",
+      "cache_id": "mycacheid",
+      "store_fakeip": true
+    }
   }
 }
 EOF
 
-  echo "Starting SingBox..."
+# Running NPM service
+if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
+    tlsPorts=("443" "8443" "2096" "2087" "2083" "2053")
+    if [[ "${tlsPorts[*]}" =~ "${NEZHA_PORT}" ]]; then
+      NEZHA_TLS="--tls"
+    else
+      NEZHA_TLS=""
+    fi
+    if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
+        export TMPDIR=$(pwd)
+        nohup ./"$(basename ${FILE_MAP[npm]})" -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 &
+        sleep 2
+        pgrep -x "$(basename ${FILE_MAP[npm]})" > /dev/null && green "$(basename ${FILE_MAP[npm]}) is running" || { red "$(basename ${FILE_MAP[npm]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[npm]})" && nohup ./"$(basename ${FILE_MAP[npm]})" -s "${NEZHA_SERVER}:${NEZHA_PORT}" -p "${NEZHA_KEY}" ${NEZHA_TLS} >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[npm]}) restarted"; }
+    else
+        purple "NEZHA variable is empty, skipping running"
+    fi
+fi
 
-  nohup ./singbox -c config.json > "$WORKDIR/singbox.log" 2>&1 &
+# Running Web service
+if [ -e "$(basename ${FILE_MAP[web]})" ]; then
+    nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 &
+    sleep 2
+    pgrep -x "$(basename ${FILE_MAP[web]})" > /dev/null && green "$(basename ${FILE_MAP[web]}) is running" || { red "$(basename ${FILE_MAP[web]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[web]})" && nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[web]}) restarted"; }
+fi
+sleep 1
+rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})"
 }
 
-download_and_run_singbox
+get_ip() {
+  ip=$(curl -s --max-time 1.5 ipv4.ip.sb)
+  if [ -z "$ip" ]; then
+    ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$HOSTNAME" )
+  else
+    url="https://www.toolsdaquan.com/toolapi/public/ipchecking/$ip/443"
+    response=$(curl -s --location --max-time 3 --request GET "$url" --header 'Referer: https://www.toolsdaquan.com/ipcheck')
+    if [ -z "$response" ] || ! echo "$response" | grep -q '"icmp":"success"'; then
+        accessible=false
+    else
+        accessible=true
+    fi
+    if [ "$accessible" = false ]; then
+        ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$ip" )
+    fi
+  fi
+  echo "$ip"
+}
+
+get_links(){
+ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26}' | sed -e 's/ /_/g' || echo "0")
+get_name() { if [ "$HOSTNAME" = "s1.ct8.pl" ]; then SERVER="CT8"; else SERVER=$(echo "$HOSTNAME" | cut -d '.' -f 1); fi; echo "$SERVER"; }
+NAME="$ISP-$(get_name)"
+yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
+cat > list.txt <<EOF
+vless://$UUID@$IP:$vless_port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=play-fe.googleapis.com&fp=chrome&pbk=$public_key&type=tcp&headerType=none#$NAME-reality
+
+hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$NAME-hy2
+
+tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$NAME-tuic
+EOF
+cat list.txt
+purple "\n$WORKDIR/list.txt saved successfully"
+purple "Running done!\n"
+sleep 3 
+rm -rf config.json sb.log core fake_useragent_0.2.0.json
+
+}
+
+# 主安装函数
+install_singbox() {
+    cd $WORKDIR
+    download_and_run_singbox
+    get_links
+}
+
+install_singbox
