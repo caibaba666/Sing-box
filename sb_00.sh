@@ -15,7 +15,7 @@ reading() { read -p "$(red "$1")" "$2"; }
 vless_port=23904
 tuic_port=41430
 hy2_port=60782
-SERVER_NAME=google.com
+SERVER_NAME=www.firsty.app
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
 export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
