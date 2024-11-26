@@ -12,9 +12,9 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
 
-vless_port=23205
-tuic_port=11983
-hy2_port=43677
+vless_port=23904
+tuic_port=41430
+hy2_port=60782
 SERVER_NAME=google.com
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
