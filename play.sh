@@ -2,32 +2,134 @@
 
 # 定义颜色
 re="\033[0m"
-red_func="\033[1;91m"
-green_func="\e[1;32m"
-yellow_func="\e[1;33m"
-purple_func="\e[1;35m"
+red="\033[1;91m"
+green="\e[1;32m"
+yellow="\e[1;33m"
+purple="\e[1;35m"
+red() { echo -e "\e[1;91m$1\033[0m"; }
+green() { echo -e "\e[1;32m$1\033[0m"; }
+yellow() { echo -e "\e[1;33m$1\033[0m"; }
+purple() { echo -e "\e[1;35m$1\033[0m"; }
+reading() { read -p "$(red "$1")" "$2"; }
 
-# 颜色输出函数
-red() { echo -e "$red_func$1$re"; }
-green() { echo -e "$green_func$1$re"; }
-yellow() { echo -e "$yellow_func$1$re"; }
-purple() { echo -e "$purple_func$1$re"; }
-
-# 设置默认端口
-vless_port=44
-hy2_port=80
-tuic_port=8003
-
+vless_port=12345
+tuic_port=1234
+hy2_port=125
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
 export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
-export NEZHA_SERVER=${NEZHA_SERVER:-''} 
-export NEZHA_PORT=${NEZHA_PORT:-'5555'}     
+export NEZHA_SERVER=${NEZHA_SERVER:-''}
+export NEZHA_PORT=${NEZHA_PORT:-'5555'}
 export NEZHA_KEY=${NEZHA_KEY:-''}
 
 [[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="domains/${USERNAME}.ct8.pl/logs" || WORKDIR="domains/${USERNAME}.serv00.net/logs"
 [ -d "$WORKDIR" ] || (mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR")
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 > /dev/null 2>&1
+
+read_vless_port() {
+    while true; do
+        if [[ -z "$vless_port" ]] || [[ ! "$vless_port" =~ ^[0-9]+$ ]] || [ "$vless_port" -lt 1 ] || [ "$vless_port" -gt 65535 ]; then
+            yellow "全局变量 vless_port 无效，请设置有效的 vless-reality 端口"
+            break
+        else
+            green "你的vless-reality端口为: $vless_port"
+            break
+        fi
+    done
+}
+
+read_hy2_port() {
+    while true; do
+        if [[ -z "$hy2_port" ]] || [[ ! "$hy2_port" =~ ^[0-9]+$ ]] || [ "$hy2_port" -lt 1 ] || [ "$hy2_port" -gt 65535 ]; then
+            yellow "全局变量 hy2_port 无效，请设置有效的 hysteria2 UDP 端口"
+            break
+        else
+            green "你的hysteria2端口为: $hy2_port"
+            break
+        fi
+    done
+}
+
+read_tuic_port() {
+    while true; do
+        if [[ -z "$tuic_port" ]] || [[ ! "$tuic_port" =~ ^[0-9]+$ ]] || [ "$tuic_port" -lt 1 ] || [ "$tuic_port" -gt 65535 ]; then
+            yellow "全局变量 tuic_port 无效，请设置有效的 Tuic UDP 端口"
+            break
+        else
+            green "你的tuic端口为: $tuic_port"
+            break
+        fi
+    done
+}
+
+
+read_nz_variables() {
+  if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
+      green "使用自定义变量哪吒运行哪吒探针"
+      return
+  else
+      reading "是否需要安装哪吒探针？【y/n】: " nz_choice
+      [[ -z $nz_choice ]] && return
+      [[ "$nz_choice" != "y" && "$nz_choice" != "Y" ]] && return
+      reading "请输入哪吒探针域名或ip：" NEZHA_SERVER
+      green "你的哪吒域名为: $NEZHA_SERVER"
+      reading "请输入哪吒探针端口（回车跳过默认使用5555）：" NEZHA_PORT
+      [[ -z $NEZHA_PORT ]] && NEZHA_PORT="5555"
+      green "你的哪吒端口为: $NEZHA_PORT"
+      reading "请输入哪吒探针密钥：" NEZHA_KEY
+      green "你的哪吒密钥为: $NEZHA_KEY"
+  fi
+}
+
+install_singbox() {
+echo -e "${yellow}本脚本同时三协议共存${purple}(vless-reality|hysteria2|tuic)${re}"
+echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个tcp端口和两个udp端口${re}"
+echo -e "${yellow}面板${purple}Additional services中的Run your own applications${yellow}已开启为${purplw}Enabled${yellow}状态${re}"
+cd $WORKDIR
+#read_nz_variables
+read_vless_port
+read_hy2_port
+read_tuic_port
+download_and_run_singbox
+get_links
+
+#reading "\n确定继续安装吗？【y/n】: " choice
+#  case "$choice" in
+#    [Yy])
+#        cd $WORKDIR
+#        read_nz_variables
+#        read_vless_port
+#        read_hy2_port
+#        read_tuic_port
+#        download_and_run_singbox
+#        get_links
+#      ;;
+##    [Nn]) exit 0 ;;
+##    *) red "无效的选择，请输入y或n" && menu ;;
+##  esac
+}
+
+uninstall_singbox() {
+  reading "\n确定要卸载吗？【y/n】: " choice
+    case "$choice" in
+       [Yy])
+          ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+          rm -rf $WORKDIR
+          clear
+          green "已完全卸载"
+          ;;
+        [Nn]) exit 0 ;;
+    	*) red "无效的选择，请输入y或n" && menu ;;
+    esac
+}
+
+kill_all_tasks() {
+reading "\n清理所有进程将退出ssh连接，确定继续清理吗？【y/n】: " choice
+  case "$choice" in
+    [Yy]) killall -9 -u $(whoami) ;;
+       *) menu ;;
+  esac
+}
 
 # Download Dependency Files
 download_and_run_singbox() {
@@ -40,7 +142,7 @@ download_and_run_singbox() {
       echo "Unsupported architecture: $ARCH"
       exit 1
   fi
-
+declare -A FILE_MAP
 generate_random_name() {
     local chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
     local name=""
@@ -54,36 +156,35 @@ download_with_fallback() {
     local URL=$1
     local NEW_FILENAME=$2
 
-    curl -L -sS --max-time 2 -o "$NEW_FILENAME" "$URL" & 
+    curl -L -sS --max-time 2 -o "$NEW_FILENAME" "$URL" &
     CURL_PID=$!
     CURL_START_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
-    
+
     sleep 1
     CURL_CURRENT_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
-    
+
     if [ "$CURL_CURRENT_SIZE" -le "$CURL_START_SIZE" ]; then
         kill $CURL_PID 2>/dev/null
         wait $CURL_PID 2>/dev/null
         wget -q -O "$NEW_FILENAME" "$URL"
-        echo -e "$green_funcDownloading $NEW_FILENAME by wget$re"
+        echo -e "\e[1;32mDownloading $NEW_FILENAME by wget\e[0m"
     else
         wait $CURL_PID
-        echo -e "$green_funcDownloading $NEW_FILENAME by curl$re"
+        echo -e "\e[1;32mDownloading $NEW_FILENAME by curl\e[0m"
     fi
 }
 
-declare -A FILE_MAP
 for entry in "${FILE_INFO[@]}"; do
     URL=$(echo "$entry" | cut -d ' ' -f 1)
     RANDOM_NAME=$(generate_random_name)
     NEW_FILENAME="$DOWNLOAD_DIR/$RANDOM_NAME"
-    
+
     if [ -e "$NEW_FILENAME" ]; then
-        echo -e "$green_func$NEW_FILENAME already exists, Skipping download$re"
+        echo -e "\e[1;32m$NEW_FILENAME already exists, Skipping download\e[0m"
     else
         download_with_fallback "$URL" "$NEW_FILENAME"
     fi
-    
+
     chmod +x "$NEW_FILENAME"
     FILE_MAP[$(echo "$entry" | cut -d ' ' -f 2)]="$NEW_FILENAME"
 done
@@ -96,7 +197,7 @@ public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 openssl ecparam -genkey -name prime256v1 -out "private.key"
 openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=$USERNAME.serv00.net"
 
-cat > config.json << EOF
+  cat > config.json << EOF
 {
   "log": {
     "disabled": true,
@@ -137,7 +238,7 @@ cat > config.json << EOF
     "disable_cache": false,
     "disable_expire": false
   },
-  "inbounds": [
+    "inbounds": [
     {
        "tag": "hysteria-in",
        "type": "hysteria2",
@@ -206,8 +307,9 @@ cat > config.json << EOF
         "key_path": "private.key"
       }
     }
+
  ],
-  "outbounds": [
+    "outbounds": [
     {
       "type": "direct",
       "tag": "direct"
@@ -281,7 +383,7 @@ cat > config.json << EOF
         "format": "binary",
         "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/openai.srs",
         "download_detour": "direct"
-      },      
+      },
       {
         "tag": "geosite-category-ads-all",
         "type": "remote",
@@ -302,7 +404,6 @@ cat > config.json << EOF
 }
 EOF
 
-# Running NPM service
 if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
     tlsPorts=("443" "8443" "2096" "2087" "2083" "2053")
     if [[ "${tlsPorts[*]}" =~ "${NEZHA_PORT}" ]]; then
@@ -320,7 +421,6 @@ if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
     fi
 fi
 
-# Running Web service
 if [ -e "$(basename ${FILE_MAP[web]})" ]; then
     nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 &
     sleep 2
@@ -348,6 +448,11 @@ get_ip() {
   fi
   echo "$ip"
 }
+if [[ "$(get_ip)" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    IP=$(get_ip)
+else
+    IP=$(host "$(get_ip)" | grep "has address" | awk '{print $4}')
+fi
 
 get_links(){
 ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26}' | sed -e 's/ /_/g' || echo "0")
@@ -364,16 +469,40 @@ EOF
 cat list.txt
 purple "\n$WORKDIR/list.txt saved successfully"
 purple "Running done!\n"
-sleep 3 
+sleep 3
 rm -rf config.json sb.log core fake_useragent_0.2.0.json
 
 }
 
-# 主安装函数
-install_singbox() {
-    cd $WORKDIR
-    download_and_run_singbox
-    get_links
+#主菜单
+menu() {
+   clear
+#   echo ""
+#   purple "=== Serv00|ct8老王sing-box一键三协议安装脚本 ===\n"
+#   echo -e "${green}脚本地址：${re}${yellow}https://github.com/eooce/Sing-box${re}\n"
+#   echo -e "${green}反馈论坛：${re}${yellow}https://bbs.vps8.me${re}\n"
+#   echo -e "${green}TG反馈群组：${re}${yellow}https://t.me/vps888${re}\n"
+#   purple "转载请著名出处，请勿滥用\n"
+   green "1. 安装sing-box"
+   install_singbox;
+#   echo  "==============="
+#   red "2. 卸载sing-box"
+#   echo  "==============="
+#   green "3. 查看节点信息"
+#   echo  "==============="
+#   yellow "4. 清理所有进程"
+#   echo  "==============="
+#   red "0. 退出脚本"
+#   echo "==========="
+#   reading "请输入选择(0-3): " choice
+#   echo ""
+#    case "${choice}" in
+#        1) install_singbox ;;
+#        2) uninstall_singbox ;;
+#        3) cat $WORKDIR/list.txt ;;
+#        4) kill_all_tasks ;;
+#	0) exit 0 ;;
+#        *) red "无效的选项，请输入 0 到 4" ;;
+    esac
 }
-
-install_singbox
+menu
