@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 定义颜色
+# Define colors for output
 re="\033[0m"
 red="\033[1;91m"
 green="\e[1;32m"
@@ -11,7 +11,7 @@ green() { echo -e "\e[1;32m$1\033[0m"; }
 yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 
-# 设置默认端口
+# Default ports
 vless_port=44
 hy2_port=80
 tuic_port=8003
@@ -39,20 +39,20 @@ download_and_run_singbox() {
       exit 1
   fi
 
-generate_random_name() {
+  generate_random_name() {
     local chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
     local name=""
     for i in {1..6}; do
         name="$name${chars:RANDOM%${#chars}:1}"
     done
     echo "$name"
-}
+  }
 
-download_with_fallback() {
+  download_with_fallback() {
     local URL=$1
     local NEW_FILENAME=$2
 
-    curl -L -sS --max-time 2 -o "$NEW_FILENAME" "$URL" &
+    curl -L -sS --max-time 2 -o "$NEW_FILENAME" "$URL" & 
     CURL_PID=$!
     CURL_START_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
     
@@ -68,10 +68,10 @@ download_with_fallback() {
         wait $CURL_PID
         echo -e "\e[1;32mDownloading $NEW_FILENAME by curl\e[0m"
     fi
-}
+  }
 
-declare -A FILE_MAP
-for entry in "${FILE_INFO[@]}"; do
+  declare -A FILE_MAP
+  for entry in "${FILE_INFO[@]}"; do
     URL=$(echo "$entry" | cut -d ' ' -f 1)
     RANDOM_NAME=$(generate_random_name)
     NEW_FILENAME="$DOWNLOAD_DIR/$RANDOM_NAME"
@@ -84,15 +84,15 @@ for entry in "${FILE_INFO[@]}"; do
     
     chmod +x "$NEW_FILENAME"
     FILE_MAP[$(echo "$entry" | cut -d ' ' -f 2)]="$NEW_FILENAME"
-done
-wait
+  done
+  wait
 
-output=$(./"$(basename ${FILE_MAP[web]})" generate reality-keypair)
-private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
-public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
+  output=$(./"$(basename ${FILE_MAP[web]})" generate reality-keypair)
+  private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
+  public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 
-openssl ecparam -genkey -name prime256v1 -out "private.key"
-openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=$USERNAME.serv00.net"
+  openssl ecparam -genkey -name prime256v1 -out "private.key"
+  openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=$USERNAME.serv00.net"
 
   cat > config.json << EOF
 {
@@ -135,7 +135,7 @@ openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=
     "disable_cache": false,
     "disable_expire": false
   },
-    "inbounds": [
+  "inbounds": [
     {
        "tag": "hysteria-in",
        "type": "hysteria2",
@@ -204,8 +204,8 @@ openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=
         "key_path": "private.key"
       }
     }
- ],
-    "outbounds": [
+  ],
+  "outbounds": [
     {
       "type": "direct",
       "tag": "direct"
@@ -248,153 +248,18 @@ openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=
       },
       {
         "rule_set": [
-          "geosite-openai"
-        ],
-        "outbound": "wireguard-out"
-      },
-      {
-        "rule_set": [
-          "geosite-netflix"
-        ],
-        "outbound": "wireguard-out"
-      },
-      {
-        "rule_set": [
-          "geosite-category-ads-all"
+          "geosite-all"
         ],
         "outbound": "block"
       }
-    ],
-    "rule_set": [
-      {
-        "tag": "geosite-netflix",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-netflix.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-openai",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/openai.srs",
-        "download_detour": "direct"
-      },      
-      {
-        "tag": "geosite-category-ads-all",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-        "download_detour": "direct"
-      }
-    ],
-    "final": "direct"
-   },
-   "experimental": {
-      "cache_file": {
-      "path": "cache.db",
-      "cache_id": "mycacheid",
-      "store_fakeip": true
-    }
+    ]
   }
 }
 EOF
 
-if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
-    tlsPorts=("443" "8443" "2096" "2087" "2083" "2053")
-    if [[ "${tlsPorts[*]}" =~ "${NEZHA_PORT}" ]]; then
-      NEZHA_TLS="--tls"
-    else
-      NEZHA_TLS=""
-    fi
-    if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
-        export TMPDIR=$(pwd)
-        nohup ./"$(basename ${FILE_MAP[npm]})" -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 &
-        sleep 2
-        pgrep -x "$(basename ${FILE_MAP[npm]})" > /dev/null && green "$(basename ${FILE_MAP[npm]}) is running" || { red "$(basename ${FILE_MAP[npm]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[npm]})" && nohup ./"$(basename ${FILE_MAP[npm]})" -s "${NEZHA_SERVER}:${NEZHA_PORT}" -p "${NEZHA_KEY}" ${NEZHA_TLS} >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[npm]}) restarted"; }
-    else
-        purple "NEZHA variable is empty, skipping running"
-    fi
-fi
+  echo "Starting SingBox..."
 
-if [ -e "$(basename ${FILE_MAP[web]})" ]; then
-    nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 &
-    sleep 2
-    pgrep -x "$(basename ${FILE_MAP[web]})" > /dev/null && green "$(basename ${FILE_MAP[web]}) is running" || { red "$(basename ${FILE_MAP[web]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[web]})" && nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[web]}) restarted"; }
-fi
-sleep 1
-rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})"
+  nohup ./singbox -c config.json > "$WORKDIR/singbox.log" 2>&1 &
 }
 
-get_ip() {
-  ip=$(curl -s --max-time 1.5 ipv4.ip.sb)
-  if [ -z "$ip" ]; then
-    ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$HOSTNAME" )
-  else
-    url="https://www.toolsdaquan.com/toolapi/public/ipchecking/$ip/443"
-    response=$(curl -s --location --max-time 3 --request GET "$url" --header 'Referer: https://www.toolsdaquan.com/ipcheck')
-    if [ -z "$response" ] || ! echo "$response" | grep -q '"icmp":"success"'; then
-        accessible=false
-    else
-        accessible=true
-    fi
-    if [ "$accessible" = false ]; then
-        ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$ip" )
-    fi
-  fi
-  echo "$ip"
-}
-if [[ "$(get_ip)" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    IP=$(get_ip)
-else
-    IP=$(host "$(get_ip)" | grep "has address" | awk '{print $4}')
-fi
-
-get_links(){
-ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26}' | sed -e 's/ /_/g' || echo "0")
-get_name() { if [ "$HOSTNAME" = "s1.ct8.pl" ]; then SERVER="CT8"; else SERVER=$(echo "$HOSTNAME" | cut -d '.' -f 1); fi; echo "$SERVER"; }
-NAME="$ISP-$(get_name)"
-yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
-cat > list.txt <<EOF
-vless://$UUID@$IP:$vless_port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=play-fe.googleapis.com&fp=chrome&pbk=$public_key&type=tcp&headerType=none#$NAME-reality
-
-hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$NAME-hy2
-
-tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$NAME-tuic
-EOF
-cat list.txt
-purple "\n$WORKDIR/list.txt saved successfully"
-purple "Running done!\n"
-sleep 3 
-rm -rf config.json sb.log core fake_useragent_0.2.0.json
-
-}
-# 主安装函数
-# 主安装函数
-install_singbox() {
-    cd $WORKDIR
-    download_and_run_singbox
-    get_links
-}
-
-# IP获取部分保持不变
-get_ip() {
-  ip=$(curl -s --max-time 1.5 ipv4.ip.sb)
-  if [ -z "$ip" ]; then
-    ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$HOSTNAME" )
-  else
-    url="https://www.toolsdaquan.com/toolapi/public/ipchecking/$ip/443"
-    response=$(curl -s --location --max-time 3 --request GET "$url" --header 'Referer: https://www.toolsdaquan.com/ipcheck')
-    if [ -z "$response" ] || ! echo "$response" | grep -q '"icmp":"success"'; then
-        accessible=false
-    else
-        accessible=true
-    fi
-    if [ "$accessible" = false ]; then
-        ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$ip" )
-    fi
-  fi
-  echo "$ip"
-}
-
-install_singbox
+download_and_run_singbox
