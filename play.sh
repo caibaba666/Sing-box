@@ -6,6 +6,10 @@ red="\033[1;91m"
 green="\e[1;32m"
 yellow="\e[1;33m"
 purple="\e[1;35m"
+red() { echo -e "\e[1;91m$1\033[0m"; }
+green() { echo -e "\e[1;32m$1\033[0m"; }
+yellow() { echo -e "\e[1;33m$1\033[0m"; }
+purple() { echo -e "\e[1;35m$1\033[0m"; }
 
 # 设置默认端口
 vless_port=44
@@ -23,104 +27,26 @@ export NEZHA_KEY=${NEZHA_KEY:-''}
 [ -d "$WORKDIR" ] || (mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR")
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 > /dev/null 2>&1
 
-
-read_vless_port() {
-    while true; do
-        reading "请输入vless-reality端口 (面板开放的tcp端口): " vless_port
-        if [[ "$vless_port" =~ ^[0-9]+$ ]] && [ "$vless_port" -ge 1 ] && [ "$vless_port" -le 65535 ]; then
-            green "你的vless-reality端口为: $vless_port"
-            break
-        else
-            yellow "输入错误，请重新输入面板开放的TCP端口"
-        fi
-    done
-}
-
-read_hy2_port() {
-    while true; do
-        reading "请输入hysteria2端口 (面板开放的UDP端口): " hy2_port
-        if [[ "$hy2_port" =~ ^[0-9]+$ ]] && [ "$hy2_port" -ge 1 ] && [ "$hy2_port" -le 65535 ]; then
-            green "你的hysteria2端口为: $hy2_port"
-            break
-        else
-            yellow "输入错误，请重新输入面板开放的UDP端口"
-        fi
-    done
-}
-
-read_tuic_port() {
-    while true; do
-        reading "请输入Tuic端口 (面板开放的UDP端口): " tuic_port
-        if [[ "$tuic_port" =~ ^[0-9]+$ ]] && [ "$tuic_port" -ge 1 ] && [ "$tuic_port" -le 65535 ]; then
-            green "你的tuic端口为: $tuic_port"
-            break
-        else
-            yellow "输入错误，请重新输入面板开放的UDP端口"
-        fi
-    done
-}
-
-read_nz_variables() {
-  if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
-      green "使用自定义变量哪吒运行哪吒探针"
-      return
+# Download Dependency Files
+download_and_run_singbox() {
+  ARCH=$(uname -m) && DOWNLOAD_DIR="." && mkdir -p "$DOWNLOAD_DIR" && FILE_INFO=()
+  if [ "$ARCH" == "arm" ] || [ "$ARCH" == "arm64" ] || [ "$ARCH" == "aarch64" ]; then
+      FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web" "https://github.com/eooce/test/releases/download/ARM/swith npm")
+  elif [ "$ARCH" == "amd64" ] || [ "$ARCH" == "x86_64" ] || [ "$ARCH" == "x86" ]; then
+      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web" "https://github.com/eooce/test/releases/download/freebsd/npm npm")
   else
-      reading "是否需要安装哪吒探针？【y/n】: " nz_choice
-      [[ -z $nz_choice ]] && return
-      [[ "$nz_choice" != "y" && "$nz_choice" != "Y" ]] && return
-      reading "请输入哪吒探针域名或ip：" NEZHA_SERVER
-      green "你的哪吒域名为: $NEZHA_SERVER"
-      reading "请输入哪吒探针端口（回车跳过默认使用5555）：" NEZHA_PORT
-      [[ -z $NEZHA_PORT ]] && NEZHA_PORT="5555"
-      green "你的哪吒端口为: $NEZHA_PORT"
-      reading "请输入哪吒探针密钥：" NEZHA_KEY
-      green "你的哪吒密钥为: $NEZHA_KEY"
+      echo "Unsupported architecture: $ARCH"
+      exit 1
   fi
+
+generate_random_name() {
+    local chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
+    local name=""
+    for i in {1..6}; do
+        name="$name${chars:RANDOM%${#chars}:1}"
+    done
+    echo "$name"
 }
-
-install_singbox() {
-echo -e "${yellow}本脚本同时三协议共存${purple}(vless-reality|hysteria2|tuic)${re}"
-echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个tcp端口和两个udp端口${re}"
-echo -e "${yellow}面板${purple}Additional services中的Run your own applications${yellow}已开启为${purplw}Enabled${yellow}状态${re}"
-reading "\n确定继续安装吗？【y/n】: " choice
-  case "$choice" in
-    [Yy])
-        cd $WORKDIR
-        read_nz_variables
-        read_vless_port
-        read_hy2_port
-        read_tuic_port
-        download_and_run_singbox
-        get_links
-      ;;
-    [Nn]) exit 0 ;;
-    *) red "无效的选择，请输入y或n" && menu ;;
-  esac
-}
-
-uninstall_singbox() {
-  reading "\n确定要卸载吗？【y/n】: " choice
-    case "$choice" in
-       [Yy])
-          ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
-          rm -rf $WORKDIR
-          clear
-          green "已完全卸载"
-          ;;
-        [Nn]) exit 0 ;;
-    	*) red "无效的选择，请输入y或n" && menu ;;
-    esac
-}
-
-kill_all_tasks() {
-reading "\n清理所有进程将退出ssh连接，确定继续清理吗？【y/n】: " choice
-  case "$choice" in
-    [Yy]) killall -9 -u $(whoami) ;;
-       *) menu ;;
-  esac
-}
-
-
 
 download_with_fallback() {
     local URL=$1
@@ -144,6 +70,7 @@ download_with_fallback() {
     fi
 }
 
+declare -A FILE_MAP
 for entry in "${FILE_INFO[@]}"; do
     URL=$(echo "$entry" | cut -d ' ' -f 1)
     RANDOM_NAME=$(generate_random_name)
@@ -277,7 +204,6 @@ openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=
         "key_path": "private.key"
       }
     }
-
  ],
     "outbounds": [
     {
@@ -400,6 +326,30 @@ sleep 1
 rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})"
 }
 
+get_ip() {
+  ip=$(curl -s --max-time 1.5 ipv4.ip.sb)
+  if [ -z "$ip" ]; then
+    ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$HOSTNAME" )
+  else
+    url="https://www.toolsdaquan.com/toolapi/public/ipchecking/$ip/443"
+    response=$(curl -s --location --max-time 3 --request GET "$url" --header 'Referer: https://www.toolsdaquan.com/ipcheck')
+    if [ -z "$response" ] || ! echo "$response" | grep -q '"icmp":"success"'; then
+        accessible=false
+    else
+        accessible=true
+    fi
+    if [ "$accessible" = false ]; then
+        ip=$( [[ "$HOSTNAME" =~ ^s([0-9]|[1-2][0-9]|30)\.serv00\.com$ ]] && echo "cache${BASH_REMATCH[1]}.serv00.com" || echo "$ip" )
+    fi
+  fi
+  echo "$ip"
+}
+if [[ "$(get_ip)" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    IP=$(get_ip)
+else
+    IP=$(host "$(get_ip)" | grep "has address" | awk '{print $4}')
+fi
+
 get_links(){
 ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26}' | sed -e 's/ /_/g' || echo "0")
 get_name() { if [ "$HOSTNAME" = "s1.ct8.pl" ]; then SERVER="CT8"; else SERVER=$(echo "$HOSTNAME" | cut -d '.' -f 1); fi; echo "$SERVER"; }
@@ -419,23 +369,7 @@ sleep 3
 rm -rf config.json sb.log core fake_useragent_0.2.0.json
 
 }
-# 其余函数保持不变，只是移除了交互式输入部分
-
-download_and_run_singbox() {
-  ARCH=$(uname -m) && DOWNLOAD_DIR="." && mkdir -p "$DOWNLOAD_DIR" && FILE_INFO=()
-  if [ "$ARCH" == "arm" ] || [ "$ARCH" == "arm64" ] || [ "$ARCH" == "aarch64" ]; then
-      FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web" "https://github.com/eooce/test/releases/download/ARM/swith npm")
-  elif [ "$ARCH" == "amd64" ] || [ "$ARCH" == "x86_64" ] || [ "$ARCH" == "x86" ]; then
-      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web" "https://github.com/eooce/test/releases/download/freebsd/npm npm")
-  else
-      echo "Unsupported architecture: $ARCH"
-      exit 1
-  fi
-
-  # 下载和执行部分保持与原脚本相同
-  # ... [原脚本中download_and_run_singbox函数的其他部分保持不变]
-}
-
+# 主安装函数
 # 主安装函数
 install_singbox() {
     cd $WORKDIR
@@ -463,11 +397,4 @@ get_ip() {
   echo "$ip"
 }
 
-if [[ "$(get_ip)" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    IP=$(get_ip)
-else
-    IP=$(host "$(get_ip)" | grep "has address" | awk '{print $4}')
-fi
-
-# 启动安装
 install_singbox
