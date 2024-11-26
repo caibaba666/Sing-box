@@ -12,11 +12,14 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
 
+vless_port=23205
+tuic_port=11983
+hy2_port=43677
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
 export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
-export NEZHA_SERVER=${NEZHA_SERVER:-''} 
-export NEZHA_PORT=${NEZHA_PORT:-'5555'}     
+export NEZHA_SERVER=${NEZHA_SERVER:-''}
+export NEZHA_PORT=${NEZHA_PORT:-'5555'}
 export NEZHA_KEY=${NEZHA_KEY:-''}
 
 [[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="domains/${USERNAME}.ct8.pl/logs" || WORKDIR="domains/${USERNAME}.serv00.net/logs"
@@ -25,39 +28,40 @@ ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs 
 
 read_vless_port() {
     while true; do
-        reading "请输入vless-reality端口 (面板开放的tcp端口): " vless_port
-        if [[ "$vless_port" =~ ^[0-9]+$ ]] && [ "$vless_port" -ge 1 ] && [ "$vless_port" -le 65535 ]; then
-            green "你的vless-reality端口为: $vless_port"
+        if [[ -z "$vless_port" ]] || [[ ! "$vless_port" =~ ^[0-9]+$ ]] || [ "$vless_port" -lt 1 ] || [ "$vless_port" -gt 65535 ]; then
+            yellow "全局变量 vless_port 无效，请设置有效的 vless-reality 端口"
             break
         else
-            yellow "输入错误，请重新输入面板开放的TCP端口"
+            green "你的vless-reality端口为: $vless_port"
+            break
         fi
     done
 }
 
 read_hy2_port() {
     while true; do
-        reading "请输入hysteria2端口 (面板开放的UDP端口): " hy2_port
-        if [[ "$hy2_port" =~ ^[0-9]+$ ]] && [ "$hy2_port" -ge 1 ] && [ "$hy2_port" -le 65535 ]; then
-            green "你的hysteria2端口为: $hy2_port"
+        if [[ -z "$hy2_port" ]] || [[ ! "$hy2_port" =~ ^[0-9]+$ ]] || [ "$hy2_port" -lt 1 ] || [ "$hy2_port" -gt 65535 ]; then
+            yellow "全局变量 hy2_port 无效，请设置有效的 hysteria2 UDP 端口"
             break
         else
-            yellow "输入错误，请重新输入面板开放的UDP端口"
+            green "你的hysteria2端口为: $hy2_port"
+            break
         fi
     done
 }
 
 read_tuic_port() {
     while true; do
-        reading "请输入Tuic端口 (面板开放的UDP端口): " tuic_port
-        if [[ "$tuic_port" =~ ^[0-9]+$ ]] && [ "$tuic_port" -ge 1 ] && [ "$tuic_port" -le 65535 ]; then
-            green "你的tuic端口为: $tuic_port"
+        if [[ -z "$tuic_port" ]] || [[ ! "$tuic_port" =~ ^[0-9]+$ ]] || [ "$tuic_port" -lt 1 ] || [ "$tuic_port" -gt 65535 ]; then
+            yellow "全局变量 tuic_port 无效，请设置有效的 Tuic UDP 端口"
             break
         else
-            yellow "输入错误，请重新输入面板开放的UDP端口"
+            green "你的tuic端口为: $tuic_port"
+            break
         fi
     done
 }
+
 
 read_nz_variables() {
   if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
@@ -81,20 +85,28 @@ install_singbox() {
 echo -e "${yellow}本脚本同时三协议共存${purple}(vless-reality|hysteria2|tuic)${re}"
 echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个tcp端口和两个udp端口${re}"
 echo -e "${yellow}面板${purple}Additional services中的Run your own applications${yellow}已开启为${purplw}Enabled${yellow}状态${re}"
-reading "\n确定继续安装吗？【y/n】: " choice
-  case "$choice" in
-    [Yy])
-        cd $WORKDIR
-        read_nz_variables
-        read_vless_port
-        read_hy2_port
-        read_tuic_port
-        download_and_run_singbox
-        get_links
-      ;;
-    [Nn]) exit 0 ;;
-    *) red "无效的选择，请输入y或n" && menu ;;
-  esac
+cd $WORKDIR
+#read_nz_variables
+read_vless_port
+read_hy2_port
+read_tuic_port
+download_and_run_singbox
+get_links
+
+#reading "\n确定继续安装吗？【y/n】: " choice
+#  case "$choice" in
+#    [Yy])
+#        cd $WORKDIR
+#        read_nz_variables
+#        read_vless_port
+#        read_hy2_port
+#        read_tuic_port
+#        download_and_run_singbox
+#        get_links
+#      ;;
+##    [Nn]) exit 0 ;;
+##    *) red "无效的选择，请输入y或n" && menu ;;
+##  esac
 }
 
 uninstall_singbox() {
@@ -147,10 +159,10 @@ download_with_fallback() {
     curl -L -sS --max-time 2 -o "$NEW_FILENAME" "$URL" &
     CURL_PID=$!
     CURL_START_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
-    
+
     sleep 1
     CURL_CURRENT_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
-    
+
     if [ "$CURL_CURRENT_SIZE" -le "$CURL_START_SIZE" ]; then
         kill $CURL_PID 2>/dev/null
         wait $CURL_PID 2>/dev/null
@@ -166,13 +178,13 @@ for entry in "${FILE_INFO[@]}"; do
     URL=$(echo "$entry" | cut -d ' ' -f 1)
     RANDOM_NAME=$(generate_random_name)
     NEW_FILENAME="$DOWNLOAD_DIR/$RANDOM_NAME"
-    
+
     if [ -e "$NEW_FILENAME" ]; then
         echo -e "\e[1;32m$NEW_FILENAME already exists, Skipping download\e[0m"
     else
         download_with_fallback "$URL" "$NEW_FILENAME"
     fi
-    
+
     chmod +x "$NEW_FILENAME"
     FILE_MAP[$(echo "$entry" | cut -d ' ' -f 2)]="$NEW_FILENAME"
 done
@@ -371,7 +383,7 @@ openssl req -new -x509 -days 3650 -key "private.key" -out "cert.pem" -subj "/CN=
         "format": "binary",
         "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/openai.srs",
         "download_detour": "direct"
-      },      
+      },
       {
         "tag": "geosite-category-ads-all",
         "type": "remote",
@@ -457,7 +469,7 @@ EOF
 cat list.txt
 purple "\n$WORKDIR/list.txt saved successfully"
 purple "Running done!\n"
-sleep 3 
+sleep 3
 rm -rf config.json sb.log core fake_useragent_0.2.0.json
 
 }
@@ -465,31 +477,32 @@ rm -rf config.json sb.log core fake_useragent_0.2.0.json
 #主菜单
 menu() {
    clear
-   echo ""
-   purple "=== Serv00|ct8老王sing-box一键三协议安装脚本 ===\n"
-   echo -e "${green}脚本地址：${re}${yellow}https://github.com/eooce/Sing-box${re}\n"
-   echo -e "${green}反馈论坛：${re}${yellow}https://bbs.vps8.me${re}\n"
-   echo -e "${green}TG反馈群组：${re}${yellow}https://t.me/vps888${re}\n"
-   purple "转载请著名出处，请勿滥用\n"
+#   echo ""
+#   purple "=== Serv00|ct8老王sing-box一键三协议安装脚本 ===\n"
+#   echo -e "${green}脚本地址：${re}${yellow}https://github.com/eooce/Sing-box${re}\n"
+#   echo -e "${green}反馈论坛：${re}${yellow}https://bbs.vps8.me${re}\n"
+#   echo -e "${green}TG反馈群组：${re}${yellow}https://t.me/vps888${re}\n"
+#   purple "转载请著名出处，请勿滥用\n"
    green "1. 安装sing-box"
-   echo  "==============="
-   red "2. 卸载sing-box"
-   echo  "==============="
-   green "3. 查看节点信息"
-   echo  "==============="
-   yellow "4. 清理所有进程"
-   echo  "==============="
-   red "0. 退出脚本"
-   echo "==========="
-   reading "请输入选择(0-3): " choice
-   echo ""
-    case "${choice}" in
-        1) install_singbox ;;
-        2) uninstall_singbox ;; 
-        3) cat $WORKDIR/list.txt ;; 
-        4) kill_all_tasks ;;
-	0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 4" ;;
-    esac
+   install_singbox;
+#   echo  "==============="
+#   red "2. 卸载sing-box"
+#   echo  "==============="
+#   green "3. 查看节点信息"
+#   echo  "==============="
+#   yellow "4. 清理所有进程"
+#   echo  "==============="
+#   red "0. 退出脚本"
+#   echo "==========="
+#   reading "请输入选择(0-3): " choice
+#   echo ""
+#    case "${choice}" in
+#        1) install_singbox ;;
+#        2) uninstall_singbox ;;
+#        3) cat $WORKDIR/list.txt ;;
+#        4) kill_all_tasks ;;
+#	0) exit 0 ;;
+#        *) red "无效的选项，请输入 0 到 4" ;;
+#    esac
 }
 menu
